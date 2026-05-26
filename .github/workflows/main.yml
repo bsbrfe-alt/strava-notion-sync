@@ -1,0 +1,96 @@
+name: Sync Strava to Notion
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install requests notion-client
+
+      - name: Run sync
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+          STRAVA_REFRESH_TOKEN: ${{ secrets.STRAVA_REFRESH_TOKEN }}
+
+        run: |
+          python <<EOF
+          import os
+          import requests
+          from notion_client import Client
+
+          notion = Client(auth=os.environ["NOTION_TOKEN"])
+
+          # refresh token
+          auth = requests.post(
+              "https://www.strava.com/oauth/token",
+              data={
+                  "client_id": os.environ["STRAVA_CLIENT_ID"],
+                  "client_secret": os.environ["STRAVA_CLIENT_SECRET"],
+                  "refresh_token": os.environ["STRAVA_REFRESH_TOKEN"],
+                  "grant_type": "refresh_token",
+              },
+          ).json()
+
+          access_token = auth["access_token"]
+
+          headers = {"Authorization": f"Bearer {access_token}"}
+
+          activities = requests.get(
+              "https://www.strava.com/api/v3/athlete/activities",
+              headers=headers,
+              params={"per_page": 5},
+          ).json()
+
+          for act in activities:
+
+              title = act["name"]
+
+              notion.pages.create(
+                  parent={"database_id": os.environ["NOTION_DATABASE_ID"]},
+                  properties={
+                      "标题": {
+                          "title": [
+                              {
+                                  "text": {
+                                      "content": title
+                                  }
+                              }
+                          ]
+                      },
+
+                      "距离 (km)": {
+                          "number": round(act["distance"] / 1000, 2)
+                      },
+
+                      "爬升 (m)": {
+                          "number": act.get("total_elevation_gain", 0)
+                      },
+
+                      "日期": {
+                          "date": {
+                              "start": act["start_date_local"]
+                          }
+                      },
+                  },
+              )
+
+          print("Sync complete")
+          EOF
