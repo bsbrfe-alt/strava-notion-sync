@@ -49,7 +49,11 @@ jobs:
               },
           ).json()
 
-          access_token = auth["access_token"]
+          access_token = auth.get("access_token")
+
+if not access_token:
+
+    raise Exception(f"Strava auth failed: {auth}")
 
           headers = {"Authorization": f"Bearer {access_token}"}
 
