@@ -49,19 +49,29 @@ jobs:
               },
           ).json()
 
+          print("AUTH RESPONSE:")
+          print(auth)
+
           access_token = auth.get("access_token")
 
-if not access_token:
+          if not access_token:
+              raise Exception(f"Strava auth failed: {auth}")
 
-    raise Exception(f"Strava auth failed: {auth}")
-
-          headers = {"Authorization": f"Bearer {access_token}"}
+          headers = {
+              "Authorization": f"Bearer {access_token}"
+          }
 
           activities = requests.get(
               "https://www.strava.com/api/v3/athlete/activities",
               headers=headers,
               params={"per_page": 5},
           ).json()
+
+          print("ACTIVITIES RESPONSE:")
+          print(activities)
+
+          if not isinstance(activities, list):
+              raise Exception(f"Activities fetch failed: {activities}")
 
           for act in activities:
 
