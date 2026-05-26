@@ -1,4 +1,4 @@
-name: Sync Strava to Notion
+name: Sync Strava to NotION
 
 on:
   schedule:
@@ -38,7 +38,7 @@ jobs:
 
           notion = Client(auth=os.environ["NOTION_TOKEN"])
 
-          # refresh token
+          # 获取 access token
           auth = requests.post(
               "https://www.strava.com/oauth/token",
               data={
@@ -49,36 +49,29 @@ jobs:
               },
           ).json()
 
-          print("AUTH RESPONSE:")
-          print(auth)
-
-          access_token = auth.get("access_token")
-
-          if not access_token:
-              raise Exception(f"Strava auth failed: {auth}")
+          access_token = auth["access_token"]
 
           headers = {
               "Authorization": f"Bearer {access_token}"
           }
 
+          # 获取最近活动
           activities = requests.get(
               "https://www.strava.com/api/v3/athlete/activities",
               headers=headers,
               params={"per_page": 5},
           ).json()
 
-          print("ACTIVITIES RESPONSE:")
-          print(activities)
-
-          if not isinstance(activities, list):
-              raise Exception(f"Activities fetch failed: {activities}")
+          print("ACTIVITIES:", activities)
 
           for act in activities:
 
               title = act["name"]
 
               notion.pages.create(
-                  parent={"database_id": os.environ["NOTION_DATABASE_ID"]},
+                  parent={
+                      "database_id": os.environ["NOTION_DATABASE_ID"]
+                  },
                   properties={
                       "标题": {
                           "title": [
@@ -90,20 +83,12 @@ jobs:
                           ]
                       },
 
-                      "距离 (km)": {
-                          "number": round(act["distance"] / 1000, 2)
-                      },
-
-                      "爬升 (m)": {
-                          "number": act.get("total_elevation_gain", 0)
-                      },
-
                       "日期": {
                           "date": {
                               "start": act["start_date_local"]
                           }
-                      },
-                  },
+                      }
+                  }
               )
 
           print("Sync complete")
